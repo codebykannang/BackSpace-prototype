@@ -46,7 +46,7 @@ export default function Navbar(){
         ):(
           <div className="flex items-center gap-3">
             <Link to="/login"    className="btn btn-secondary btn-sm" onClick={close}>Sign In</Link>
-            <Link to="/register" className="btn btn-primary  btn-sm" onClick={close}>Get Started Free</Link>
+            <Link to="/register" className="btn btn-primary  btn-sm hide-phone" onClick={close}>Get Started Free</Link>
             <button className="nav-mobile-btn" onClick={()=>setOpen(v=>!v)} aria-label="Menu">
               <i className={`fas ${open?'fa-times':'fa-bars'}`} style={{fontSize:16}}/>
             </button>

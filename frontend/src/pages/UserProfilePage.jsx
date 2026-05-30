@@ -48,14 +48,14 @@ export default function UserProfilePage(){
           </div>
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:'clamp(180px,22vw,220px) 1fr',gap:'clamp(.875rem,2vw,1.5rem)',alignItems:'start'}}>
+        <div className="profile-layout">
           {/* Sidebar */}
-          <div className="card-glass" style={{padding:'.625rem'}}>
+          <div className="card-glass profile-sidebar" style={{padding:'.625rem'}}>
             {TABS.map(([icon,label],i)=>(
               <button key={label} onClick={()=>setTab(i)} style={{display:'flex',alignItems:'center',gap:'.75rem',padding:'.75rem .875rem',borderRadius:'var(--r)',border:'none',cursor:'pointer',textAlign:'left',fontSize:'.875rem',fontWeight:600,background:tab===i?'var(--g50)':'transparent',color:tab===i?'var(--g700)':'var(--text2)',marginBottom:'.25rem',transition:'all .15s',width:'100%'}}>
                 <i className={`fas ${icon}`} style={{width:16,textAlign:'center',color:tab===i?'var(--g500)':'var(--text3)',fontSize:13}}/>
                 <span className="hide-tablet">{label}</span>
-                {tab===i&&<i className="fas fa-chevron-right" style={{marginLeft:'auto',fontSize:9,color:'var(--g400)'}}/>}
+                {tab===i&&<i className="fas fa-chevron-right hide-tablet" style={{marginLeft:'auto',fontSize:9,color:'var(--g400)'}}/>}
               </button>
             ))}
           </div>

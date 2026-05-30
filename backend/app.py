@@ -12,6 +12,15 @@ import mysql.connector
 from mysql.connector import Error
 import bcrypt
 import os, secrets, tempfile, io
+try:
+    from dotenv import load_dotenv
+    _parent_env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+    if os.path.exists(_parent_env):
+        load_dotenv(_parent_env)
+    load_dotenv()
+except ImportError:
+    pass
+
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -67,7 +76,13 @@ def db():
     try:
         return mysql.connector.connect(**DB)
     except Error as e:
-        print(f'DB Error: {e}')
+        print(f"============================================================")
+        print(f"DATABASE CONNECTION ERROR:")
+        print(f"Could not connect to MySQL server at {DB['host']}.")
+        print(f"Details: {e}")
+        print(f"Please ensure MySQL is running and database configuration in your .env is correct.")
+        print(f"Current Config -> Host: {DB['host']}, User: {DB['user']}, Database: {DB['database']}")
+        print(f"============================================================")
         return None
 
 def fmt_size(b):
@@ -87,6 +102,116 @@ def file_type(name):
     if ext in {'pdf','doc','docx','xls','xlsx','ppt','pptx','txt','rtf','csv'}: return 'document'
     return 'other'
 
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+def send_email(to_email, subject, html_body):
+    """Utility to send HTML emails via SMTP (e.g. Gmail). Fail-safe so server doesn't crash."""
+    smtp_server = os.environ.get('SMTP_SERVER')
+    smtp_port = os.environ.get('SMTP_PORT')
+    smtp_user = os.environ.get('SMTP_USER')
+    smtp_pass = os.environ.get('SMTP_PASSWORD')
+    smtp_from = os.environ.get('SMTP_FROM', 'BackSpace <noreply@backspace.cloud>')
+
+    if not smtp_server or not smtp_user or not smtp_pass:
+        print("SMTP NOT CONFIG: Email sending bypassed (please fill in SMTP config in .env)")
+        return False
+
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = smtp_from
+        msg['To'] = to_email
+
+        part = MIMEText(html_body, 'html')
+        msg.attach(part)
+
+        port = int(smtp_port or 587)
+        if port == 465:
+            server = smtplib.SMTP_SSL(smtp_server, port, timeout=10)
+        else:
+            server = smtplib.SMTP(smtp_server, port, timeout=10)
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_from, to_email, msg.as_string())
+        server.quit()
+        print(f"Email sent successfully to {to_email}")
+        return True
+    except Exception as e:
+        print(f"SMTP Error: {e}")
+        return False
+
+def send_welcome_email(email, username):
+    subject = "Welcome to BackSpace — Unlimited Cloud Storage! 🚀"
+    html = f"""
+    <div style="font-family: 'DM Sans', Arial, sans-serif; background-color: #f4fbfa; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; color: #111c1a; border: 1px solid #e0eae8;">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #1a3d34; font-family: 'Syne', sans-serif; font-size: 28px; margin: 0;">BackSpace</h1>
+            <p style="color: #7a9e99; font-size: 14px; margin-top: 5px;">Unlimited Cloud Storage</p>
+        </div>
+        <hr style="border: 0; border-top: 1px solid #e0eae8; margin: 20px 0;"/>
+        <p style="font-size: 16px; line-height: 1.6;">Hello <strong>{username}</strong>,</p>
+        <p style="font-size: 16px; line-height: 1.6;">Thank you for registering at BackSpace! Your unlimited cloud storage space has been activated.</p>
+        <div style="background-color: #ffffff; border: 1px solid #c8deda; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #1a3d34;">Account Details:</h3>
+            <ul style="padding-left: 20px; margin-bottom: 0; font-size: 14px; line-height: 1.6;">
+                <li><strong>Username:</strong> {username}</li>
+                <li><strong>Email:</strong> {email}</li>
+                <li><strong>Storage Capacity:</strong> Unlimited</li>
+            </ul>
+        </div>
+        <p style="font-size: 16px; line-height: 1.6;">You can drag & drop files up to 5 GB to store them securely. All file parts are split and uploaded using secure Telegram channels.</p>
+        <hr style="border: 0; border-top: 1px solid #e0eae8; margin: 30px 0 20px;"/>
+        <p style="font-size: 12px; color: #7a9e99; text-align: center; margin: 0;">© 2026 BackSpace. All rights reserved.</p>
+    </div>
+    """
+    return send_email(email, subject, html)
+
+def send_password_change_email(email, username):
+    subject = "Security Alert: BackSpace Password Changed 🔒"
+    html = f"""
+    <div style="font-family: 'DM Sans', Arial, sans-serif; background-color: #fef2f2; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; color: #991b1b; border: 1px solid #fca5a5;">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #991b1b; font-family: 'Syne', sans-serif; font-size: 28px; margin: 0;">BackSpace Security Alert</h1>
+        </div>
+        <hr style="border: 0; border-top: 1px solid #fca5a5; margin: 20px 0;"/>
+        <p style="font-size: 16px; line-height: 1.6; color: #111c1a;">Hello <strong>{username}</strong>,</p>
+        <p style="font-size: 16px; line-height: 1.6; color: #111c1a;">This is an automated notification to alert you that the password for your BackSpace account was changed recently.</p>
+        <div style="background-color: #ffffff; border: 1px solid #fca5a5; padding: 15px; border-radius: 8px; margin: 20px 0; color: #111c1a;">
+            <p style="margin: 0; font-size: 14px; line-height: 1.6;"><strong>Time of change:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}</p>
+        </div>
+        <p style="font-size: 14px; line-height: 1.6; color: #7a9e99;">If you initiated this change, no action is required. If you did NOT authorize this change, please contact support immediately at <strong>theprozenix@gmail.com</strong>.</p>
+        <hr style="border: 0; border-top: 1px solid #fca5a5; margin: 30px 0 20px;"/>
+        <p style="font-size: 12px; color: #7a9e99; text-align: center; margin: 0;">© 2026 BackSpace. All rights reserved.</p>
+    </div>
+    """
+    return send_email(email, subject, html)
+
+def send_share_link_email(email, username, filename, share_url):
+    subject = "Your Shareable Link is Ready! 🔗"
+    html = f"""
+    <div style="font-family: 'DM Sans', Arial, sans-serif; background-color: #f4fbfa; padding: 30px; border-radius: 12px; max-width: 600px; margin: 0 auto; color: #111c1a; border: 1px solid #e0eae8;">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #1a3d34; font-family: 'Syne', sans-serif; font-size: 28px; margin: 0;">BackSpace Sharing</h1>
+        </div>
+        <hr style="border: 0; border-top: 1px solid #e0eae8; margin: 20px 0;"/>
+        <p style="font-size: 16px; line-height: 1.6;">Hello <strong>{username}</strong>,</p>
+        <p style="font-size: 16px; line-height: 1.6;">You have generated a secure sharing link for your file:</p>
+        <div style="background-color: #ffffff; border: 1px solid #c8deda; padding: 15px; border-radius: 8px; margin: 20px 0; word-break: break-all;">
+            <p style="margin: 0 0 10px 0; font-size: 15px;"><strong>File:</strong> {filename}</p>
+            <p style="margin: 0; font-size: 14px;"><strong>Link URL:</strong> <a href="{share_url}" style="color: #2d6b5c; font-weight: 600;">{share_url}</a></p>
+        </div>
+        <p style="font-size: 16px; line-height: 1.6;">You can revoke or manage this link anytime via the Sharing tab in your dashboard.</p>
+        <hr style="border: 0; border-top: 1px solid #e0eae8; margin: 30px 0 20px;"/>
+        <p style="font-size: 12px; color: #7a9e99; text-align: center; margin: 0;">© 2026 BackSpace. All rights reserved.</p>
+    </div>
+    """
+    return send_email(email, subject, html)
+
 def log(user_id, action, details=''):
     c = db()
     if not c: return
@@ -103,8 +228,25 @@ def log(user_id, action, details=''):
 def auth(f):
     @wraps(f)
     def wrap(*a, **kw):
-        if 'user_id' not in session:
+        if 'user_id' not in session or 'session_token' not in session:
+            session.clear()
             return jsonify({'success':False,'error':'Not authenticated'}), 401
+        c = db()
+        if not c:
+            # Fallback if DB connection fails temporarily
+            return f(*a, **kw)
+        try:
+            cur = c.cursor(dictionary=True)
+            cur.execute(
+                'SELECT session_id FROM user_sessions '
+                'WHERE user_id=%s AND session_token=%s AND is_active=1',
+                (session['user_id'], session['session_token'])
+            )
+            if not cur.fetchone():
+                session.clear()
+                return jsonify({'success':False,'error':'Session expired or revoked'}), 401
+        finally:
+            c.close()
         return f(*a, **kw)
     return wrap
 
@@ -113,22 +255,60 @@ def ser(row):
     return {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in row.items()}
 
 def ensure_file_parts_table(cur):
-    """Create file_parts table if it doesn't exist yet (auto-migration)."""
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS file_parts (
-            id           INT AUTO_INCREMENT PRIMARY KEY,
-            file_id      INT NOT NULL,
-            part_number  INT NOT NULL,
-            telegram_file_id VARCHAR(500) NOT NULL,
-            part_size    BIGINT DEFAULT 0,
-            INDEX idx_file_part (file_id, part_number),
-            FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    """)
+    pass
+
+def ensure_db_schema():
+    """Ensure all required tables exist on application startup."""
+    c = db()
+    if not c:
+        return
+    try:
+        cur = c.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS file_parts (
+                id           INT AUTO_INCREMENT PRIMARY KEY,
+                file_id      INT NOT NULL,
+                part_number  INT NOT NULL,
+                telegram_file_id VARCHAR(500) NOT NULL,
+                part_size    BIGINT DEFAULT 0,
+                INDEX idx_file_part (file_id, part_number),
+                FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                session_id INT PRIMARY KEY AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                session_token VARCHAR(255) UNIQUE NOT NULL,
+                ip_address VARCHAR(45),
+                user_agent TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                INDEX idx_user_sess (user_id, is_active),
+                INDEX idx_token (session_token)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """)
+        c.commit()
+        print("Database migration check passed.")
+    except Exception as e:
+        print(f"Database Migration Error: {e}")
+    finally:
+        c.close()
+
+# Run database schema verification on boot
+ensure_db_schema()
 
 # ─── TELEGRAM ──────────────────────────────────────────────────────────────────
 
 def tg_config():
+    # Try environment variables first
+    env_token = os.environ.get('TG_BOT_TOKEN')
+    env_channel = os.environ.get('TG_CHANNEL_ID')
+    if env_token and env_channel:
+        return env_token.strip(), env_channel.strip()
+
     c = db()
     if not c: return None, None
     try:
@@ -255,12 +435,26 @@ def register():
         )
         uid = cur.lastrowid
         cur.execute('INSERT INTO user_settings (user_id) VALUES (%s)', (uid,))
+        
+        # Create session token
+        token = secrets.token_hex(32)
+        cur.execute(
+            'INSERT INTO user_sessions (user_id, session_token, ip_address, user_agent) '
+            'VALUES (%s, %s, %s, %s)',
+            (uid, token, request.remote_addr, request.headers.get('User-Agent','')[:255])
+        )
         c.commit()
 
         session['user_id']  = uid
         session['username'] = username
         session['email']    = email
+        session['session_token'] = token
+        
         log(uid, 'register', email)
+        
+        # Send registration welcome email in background/safely
+        send_welcome_email(email, username)
+        
         return jsonify({'success':True,'user':{'id':uid,'username':username,'email':email}})
     except Exception as e:
         return jsonify({'success':False,'error':str(e)})
@@ -287,12 +481,20 @@ def login():
         u = cur.fetchone()
         if not u or not bcrypt.checkpw(password.encode(), u['password_hash'].encode()):
             return jsonify({'success':False,'error':'Invalid email or password'})
+        # Create session token
+        token = secrets.token_hex(32)
+        cur.execute(
+            'INSERT INTO user_sessions (user_id, session_token, ip_address, user_agent) '
+            'VALUES (%s, %s, %s, %s)',
+            (u['user_id'], token, request.remote_addr, request.headers.get('User-Agent','')[:255])
+        )
         cur.execute('UPDATE users SET last_login=NOW(),last_ip=%s WHERE user_id=%s',
                     (request.remote_addr, u['user_id']))
         c.commit()
         session['user_id']  = u['user_id']
         session['username'] = u['username']
         session['email']    = u['email']
+        session['session_token'] = token
         log(u['user_id'], 'login', email)
         return jsonify({'success':True,'user':{
             'id':u['user_id'],'username':u['username'],
@@ -307,7 +509,23 @@ def login():
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
     uid = session.get('user_id')
-    if uid: log(uid, 'logout')
+    token = session.get('session_token')
+    if uid:
+        log(uid, 'logout')
+        if token:
+            c = db()
+            if c:
+                try:
+                    cur = c.cursor()
+                    cur.execute(
+                        'UPDATE user_sessions SET is_active=0 WHERE user_id=%s AND session_token=%s',
+                        (uid, token)
+                    )
+                    c.commit()
+                except Exception as e:
+                    print(f"Logout session deactivation error: {e}")
+                finally:
+                    c.close()
     session.clear()
     return jsonify({'success':True})
 
@@ -939,12 +1157,49 @@ def profile():
             FROM files WHERE user_id=%s
         """, (uid,))
         stats = cur.fetchone() or {}
-        stats['total_storage_fmt'] = fmt_size(stats.get('total_storage',0))
-        return jsonify({'success':True,'user':u,'settings':s,'stats':stats,
-                        'sessions':[{'id':1,'device_type':'desktop',
-                                     'browser_name':request.headers.get('User-Agent','')[:60],
-                                     'ip_address':request.remote_addr,
-                                     'last_activity':datetime.now().isoformat(),'is_current':True}]})
+        # Query active user sessions from the DB
+        cur.execute(
+            'SELECT session_id AS id, ip_address, user_agent AS browser_name, last_activity, session_token '
+            'FROM user_sessions WHERE user_id=%s AND is_active=1 ORDER BY last_activity DESC',
+            (uid,)
+        )
+        sessions = []
+        current_token = session.get('session_token', '')
+        for r in cur.fetchall():
+            is_current = (r['session_token'] == current_token)
+            ua = r['browser_name'] or 'Unknown Browser'
+            if 'Chrome' in ua: browser = 'Google Chrome'
+            elif 'Firefox' in ua: browser = 'Mozilla Firefox'
+            elif 'Safari' in ua: browser = 'Apple Safari'
+            elif 'Edge' in ua: browser = 'Microsoft Edge'
+            else: browser = ua[:60]
+            
+            sessions.append({
+                'id': r['id'],
+                'device_type': 'mobile' if any(m in ua.lower() for m in ['mobile', 'android', 'iphone']) else 'desktop',
+                'browser_name': browser,
+                'ip_address': r['ip_address'] or 'Unknown IP',
+                'last_activity': r['last_activity'].isoformat() if isinstance(r['last_activity'], datetime) else r['last_activity'],
+                'is_current': is_current
+            })
+
+        return jsonify({'success':True,'user':u,'settings':s,'stats':stats,'sessions':sessions})
+    finally:
+        c.close()
+
+@app.route('/api/profile/sessions/revoke/<int:sid>', methods=['POST'])
+@auth
+def revoke_session(sid):
+    uid = session['user_id']
+    c = db()
+    if not c: return jsonify({'success':False,'error':'DB error'})
+    try:
+        cur = c.cursor()
+        cur.execute('UPDATE user_sessions SET is_active=0 WHERE session_id=%s AND user_id=%s', (sid, uid))
+        c.commit()
+        return jsonify({'success':True})
+    except Exception as e:
+        return jsonify({'success':False,'error':str(e)})
     finally:
         c.close()
 

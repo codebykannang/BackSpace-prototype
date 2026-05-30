@@ -139,3 +139,18 @@ CREATE TABLE IF NOT EXISTS telegram_config (
 INSERT INTO telegram_config (bot_token, channel_id, admin_user_id)
 VALUES ('8206630703:AAFlvC13XGlPyAE4xsdAVihlJIDenfJ4Atk', '-1003871803306', '@Kannan12221');
 
+-- ─── USER SESSIONS ──────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_sessions (
+    session_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    session_token VARCHAR(255) UNIQUE NOT NULL,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    INDEX idx_user_sess (user_id, is_active),
+    INDEX idx_token (session_token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
